@@ -1,4 +1,13 @@
 services:
+#if you dont have ollama locally, uncomment what is commented :
+
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama:/root/.ollama
+
   backend:
     build: ./backend
     ports:
@@ -7,6 +16,10 @@ services:
       - ./backend/.env
     volumes:
       - ./backend/storage:/app/storage
+    # environment:
+    #   - OLLAMA_BASE_URL=http://ollama:11434
+    # depends_on:
+    #   - ollama
 
   frontend:
     build: ./frontend
@@ -16,3 +29,6 @@ services:
       - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
+
+# volumes:
+#   ollama:
