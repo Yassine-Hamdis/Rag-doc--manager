@@ -1,14 +1,24 @@
 import { useState, useEffect } from "react";
-import { getOverview } from "../api/analytics.api";
-import type { AnalyticsOverview } from "../types/api";
+import { getOverview, getDailyStats, getTopDocuments } from "../api/analytics.api";
+import type { AnalyticsOverview, DailyStats, TopDocument } from "../types/api";
 
 export function Dashboard() {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
+  const [daily, setDaily] = useState<DailyStats[]>([]);
+  const [topDocs, setTopDocs] = useState<TopDocument[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getOverview()
-      .then(res => setOverview(res.data))
+    Promise.all([
+      getOverview(),
+      getDailyStats(7),
+      getTopDocuments(5),
+    ])
+      .then(([o, d, t]) => {
+        setOverview(o.data);
+        setDaily(d.data);
+        setTopDocs(t.data);
+      })
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
   }, []);
@@ -27,7 +37,7 @@ export function Dashboard() {
         <StatCard title="⚡ Latence (ms)" value={overview.avg_latency_ms} color="#9b59b6" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
         <div style={{ padding: "20px", backgroundColor: "white", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
           <h3>📈 Statut des documents</h3>
           {Object.entries(overview.documents_by_status).map(([status, count]) => (
@@ -45,6 +55,51 @@ export function Dashboard() {
             </div>
             <div style={{ color: "#666" }}>réponses avec sources</div>
           </div>
+        </div>
+      </div>
+
+      {/* NEW: Daily + Top documents (minimal UI) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "24px" }}>
+        <div style={{ padding: "20px", backgroundColor: "white", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
+          <h3>📅 Activité (7 derniers jours)</h3>
+          {daily.length === 0 ? (
+            <div style={{ color: "#666" }}>Aucune donnée</div>
+          ) : (
+            <div style={{ display: "grid", gap: "10px" }}>
+              {daily.map((d) => (
+                <div
+                  key={d.date}
+                  style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #eee", paddingBottom: 8 }}
+                >
+                  <span style={{ fontFamily: "monospace" }}>{d.date}</span>
+                  <span>
+                    <strong>{d.questions}</strong> questions • {Math.round(d.avg_latency_ms)} ms
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: "20px", backgroundColor: "white", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
+          <h3>📌 Top documents</h3>
+          {topDocs.length === 0 ? (
+            <div style={{ color: "#666" }}>Aucune donnée</div>
+          ) : (
+            <div style={{ display: "grid", gap: "10px" }}>
+              {topDocs.map((d) => (
+                <div
+                  key={d.doc_id}
+                  style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #eee", paddingBottom: 8 }}
+                >
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>
+                    {d.doc_name || `Document #${d.doc_id}`}
+                  </span>
+                  <strong>{d.usage_count}</strong>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

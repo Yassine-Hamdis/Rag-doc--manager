@@ -31,5 +31,11 @@ def get_top_documents(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    service = AnalyticsService(db, user_id)
-    return service.get_top_documents(limit)
+    try:
+        service = AnalyticsService(db, user_id)
+        data = service.get_top_documents(limit)
+        print("DEBUG top-documents:", data)  # <--- add this
+        return data
+    except Exception as e:
+        print("ERROR in /analytics/top-documents:", repr(e))  # <--- add this
+        raise HTTPException(status_code=500, detail=str(e))

@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db.models import Document, ChatSession, Message
 import json
+from collections import Counter
 
 class AnalyticsService:
     def __init__(self, db: Session, user_id: int):
@@ -60,9 +61,100 @@ class AnalyticsService:
             "documents_by_status": docs_by_status
         }
     
-    def get_daily_stats(self, days: int = 7) -> list:
-        # Simplified - you can enhance with actual date grouping
-        messages = self.db.query(Message).join(ChatSession).filter(
-            ChatSession.user_id == self.user_id,
-            Message.role == "user"
-        ).order_by(Message.created_at.desc()).limit(days * 10).all
+    def get_daily_stats(self, days: int = 7) -> list[dict]:
+        """
+        Returns per-day:
+          - questions: count of user messages
+          - avg_latency_ms: average latency of assistant messages
+        Note: these are computed independently per day (simple & reliable).
+        """
+
+        # Questions/day (user messages)
+        q_rows = (
+            self.db.query(
+                func.date(Message.created_at).label("d"),
+                func.count(Message.id).label("questions"),
+            )
+            .join(ChatSession, ChatSession.id == Message.session_id)
+            .filter(ChatSession.user_id == self.user_id, Message.role == "user")
+            .group_by(func.date(Message.created_at))
+            .order_by(func.date(Message.created_at).desc())
+            .limit(days)
+            .all()
+        )
+
+        # Avg latency/day (assistant messages)
+        l_rows = (
+            self.db.query(
+                func.date(Message.created_at).label("d"),
+                func.avg(Message.latency_ms).label("avg_latency"),
+            )
+            .join(ChatSession, ChatSession.id == Message.session_id)
+            .filter(
+                ChatSession.user_id == self.user_id,
+                Message.role == "assistant",
+                Message.latency_ms.isnot(None),
+            )
+            .group_by(func.date(Message.created_at))
+            .order_by(func.date(Message.created_at).desc())
+            .limit(days)
+            .all()
+        )
+
+        q_map = {r.d: int(r.questions) for r in q_rows if r.d is not None}
+        l_map = {r.d: float(r.avg_latency or 0.0) for r in l_rows if r.d is not None}
+
+        # Merge dates (some days may have questions but no assistant latency, etc.)
+        dates = sorted(set(q_map.keys()) | set(l_map.keys()), reverse=True)[:days]
+
+        return [
+            {
+                "date": d,  # SQLite func.date returns 'YYYY-MM-DD'
+                "questions": q_map.get(d, 0),
+                "avg_latency_ms": round(l_map.get(d, 0.0), 2),
+            }
+            for d in dates
+        ]
+
+    def get_top_documents(self, limit: int = 5) -> list[dict]:
+        """
+        Counts how many assistant answers cited each document (based on sources_json).
+        usage_count = number of assistant messages where the document appears at least once.
+        """
+
+        assistant_msgs = (
+            self.db.query(Message)
+            .join(ChatSession, ChatSession.id == Message.session_id)
+            .filter(
+                ChatSession.user_id == self.user_id,
+                Message.role == "assistant",
+                Message.sources_json.isnot(None),
+            )
+            .all()
+        )
+
+        counter = Counter()  # (doc_id, doc_name) -> count
+
+        for m in assistant_msgs:
+            try:
+                sources = json.loads(m.sources_json) or []
+            except Exception:
+                continue
+
+            seen_docs = set()
+            for s in sources:
+                doc_id = s.get("doc_id")
+                doc_name = s.get("doc_name") or ""
+                if doc_id is None:
+                    continue
+                key = (int(doc_id), doc_name)
+                seen_docs.add(key)
+
+            for key in seen_docs:
+                counter[key] += 1
+
+        top = counter.most_common(limit)
+        return [
+            {"doc_id": doc_id, "doc_name": doc_name, "usage_count": count}
+            for (doc_id, doc_name), count in top
+        ]

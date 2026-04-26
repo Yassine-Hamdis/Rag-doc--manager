@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { me } from "../api/auth.api";
 import type { MeResponse } from "../types/api";
 

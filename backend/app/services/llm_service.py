@@ -7,3 +7,5 @@ def ollama_generate(prompt: str) -> str:
     r = requests.post(url, json=payload, timeout=180)
     r.raise_for_status()
     return r.json().get("response", "")
+
+# For production, we call this function ( openrouter )
