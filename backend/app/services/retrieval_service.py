@@ -57,7 +57,7 @@ class RetrievalService:
         self.tfidf_metadata = res.get("metadatas", [])
         
         if self.tfidf_texts:
-            self.tfidf_vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
+            self.tfidf_vectorizer = TfidfVectorizer(max_features=5000)
             self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.tfidf_texts)
     
     def retrieve_bm25(self, query: str, user_id: int, top_k: int, doc_ids: list = None) -> tuple:

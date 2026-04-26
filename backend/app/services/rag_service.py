@@ -3,10 +3,12 @@ from app.services.pdf_service import extract_pages_text
 from app.services.chunk_service import chunk_text
 from app.services.llm_service import ollama_generate
 
-SYSTEM_RULES = """Tu es un assistant. Réponds uniquement en utilisant le CONTEXTE.
-Si la réponse n'est pas dans le contexte, dis exactement:
-"Je n'ai pas trouvé l'information dans les documents fournis."
-Réponds en français, clairement, avec des points si nécessaire.
+SYSTEM_RULES = """You are an assistant. Answer ONLY using the CONTEXT.
+If the answer is not in the context, say exactly:
+"I couldn't find the information in the provided documents."
+
+Answer in the SAME language as the QUESTION (French/English/Arabic).
+Be clear and structured.
 """
 
 def build_prompt(question: str, contexts: list[str]) -> str:
@@ -53,15 +55,15 @@ def ask_rag(user_id: int, question: str, top_k: int, retrieval_service, embedder
     
     if not docs:
         if doc_ids and len(doc_ids) > 0:
-            return "Je n'ai pas trouvé l'information dans les documents sélectionnés.", []
-        return "Je n'ai pas trouvé l'information dans les documents fournis.", []
+            return "I couldn't find the information in the provided documents.", []
+        return "I couldn't find the information in the provided documents.", []
     
     # Filter by relevance threshold
     MIN_SCORE = 0.3
     relevant_indices = [i for i, score in enumerate(scores) if score >= MIN_SCORE]
     
     if not relevant_indices:
-        return "Je n'ai pas trouvé d'information suffisamment pertinente dans les documents.", []
+        return "I couldn't find sufficiently relevant information in the provided documents.", []
     
     filtered_docs = [docs[i] for i in relevant_indices]
     filtered_metas = [metas[i] for i in relevant_indices]
